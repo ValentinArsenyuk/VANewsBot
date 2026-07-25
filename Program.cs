@@ -1,6 +1,8 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Telegram.Bot;
+using TelegramBot.Models;
 using TelegramBot.Services;
+using VANewsBot.Models.TelegramBot.Models;
 
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -38,8 +40,35 @@ var botClient =
 
 
 
-var commandHandler =
-    new CommandHandlerService(botClient);
+// create shared services for monitoring and command handling
+var riskSection = config.GetSection("RiskMonitoring");
+
+var riskSettings = new RiskMonitoringSettings();
+
+if (riskSection.Exists())
+{
+    var rssChildren = riskSection.GetSection("RssUrls").GetChildren();
+    foreach (var c in rssChildren)
+    {
+        if (!string.IsNullOrEmpty(c.Value))
+            riskSettings.RssUrls.Add(c.Value);
+    }
+
+    var chanChildren = riskSection.GetSection("TelegramChannels").GetChildren();
+    foreach (var c in chanChildren)
+    {
+        if (!string.IsNullOrEmpty(c.Value))
+            riskSettings.TelegramChannels.Add(c.Value);
+    }
+
+    riskSettings.IsraeliProxyUrl = riskSection["IsraeliProxyUrl"];
+}
+
+var orefAlertService = new OrefAlertService(riskSettings.IsraeliProxyUrl);
+var telegramChannelService = new TelegramChannelService(riskSettings.TelegramChannels);
+var newsRiskService = new NewsRiskService(riskSettings.RssUrls, orefAlertService, telegramChannelService);
+
+var commandHandler = new CommandHandlerService(botClient, newsRiskService);
 
 
 
@@ -57,18 +86,21 @@ if (!string.IsNullOrEmpty(
 
 
 
+// (RiskMonitoring already bound above)
+
+if (riskSettings.RssUrls.Count == 0 && riskSettings.TelegramChannels.Count == 0)
+{
+    Console.WriteLine(
+        "Предупреждение: секция RiskMonitoring пустая или не найдена в appsettings.json"
+    );
+}
+
+
 if (chatId != 0)
 {
-    var warMonitor =
-        new WarMonitorService(
-            botClient,
-            chatId
-        );
+    var warMonitor = new WarMonitorService(botClient, chatId, newsRiskService);
 
-
-    _ = Task.Run(() =>
-        warMonitor.Start()
-    );
+    _ = Task.Run(() => warMonitor.Start());
 }
 
 

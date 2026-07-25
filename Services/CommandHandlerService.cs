@@ -9,12 +9,12 @@ namespace TelegramBot.Services
         private readonly TelegramBotClient _bot;
         private readonly NewsRiskService _riskService;
 
-
         public CommandHandlerService(
-            TelegramBotClient bot)
+            TelegramBotClient bot,
+            NewsRiskService newsRiskService)
         {
             _bot = bot;
-            _riskService = new NewsRiskService();
+            _riskService = newsRiskService;
         }
 
 
@@ -39,40 +39,59 @@ namespace TelegramBot.Services
 
             if (text == "/risk")
             {
-                var result =
-                    await _riskService.CalculateRisk();
+                // register subscriber
+                var chatId = update.Message.Chat.Id;
+                string displayName;
 
+                if (update.Message.From != null)
+                {
+                    var from = update.Message.From;
+                    if (!string.IsNullOrEmpty(from.Username))
+                        displayName = "@" + from.Username;
+                    else
+                        displayName = (from.FirstName + " " + from.LastName).Trim();
+                }
+                else
+                {
+                    displayName = chatId.ToString();
+                }
 
+                SubscriberStore.Add(chatId, displayName);
 
-                string reasons =
-                    string.Join(
-                        "\n",
-                        result.Reasons
-                            .Select(
-                                x => "• " + x
-                            )
-                    );
+                var result = await _riskService.CalculateRisk();
 
+                string reasons = string.Join("\n", result.Reasons.Select(x => "• " + x));
 
+                string subscribers = SubscriberStore.GetDisplayListText();
 
                 string message =
                     $"📊 Текущий мониторинг\n\n" +
-
                     $"🇮🇱 Израиль – 🇮🇷 Иран\n\n" +
-
                     $"Риск: {result.Score}%\n\n" +
-
                     $"Причины:\n{reasons}\n\n" +
-
+                    //$"Подписались: {subscribers}\n\n" +
                     $"Время: {DateTime.Now:dd.MM.yyyy HH:mm}";
 
+                var subscriberIds = SubscriberStore.GetSubscriberIds();
 
-
-                await _bot.SendMessage(
-                    chatId: update.Message.Chat.Id,
-                    text: message,
-                    cancellationToken: cancellationToken
-                );
+                if (subscriberIds.Count == 0)
+                {
+                    await _bot.SendMessage(chatId: chatId, text: message, cancellationToken: cancellationToken);
+                }
+                else
+                {
+                    foreach (var sid in subscriberIds)
+                    {
+                        try
+                        {
+                            await _bot.SendMessage(chatId: sid, text: message, cancellationToken: cancellationToken);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Ошибка отправки подписчику {sid}: {ex.Message}");
+                        }
+                    }
+                }
             }
 
 

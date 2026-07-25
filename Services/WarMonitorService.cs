@@ -1,5 +1,6 @@
 ﻿using Telegram.Bot;
 using TelegramBot.Models;
+using VANewsBot.Models.TelegramBot.Models;
 
 namespace TelegramBot.Services
 {
@@ -14,54 +15,39 @@ namespace TelegramBot.Services
 
         public WarMonitorService(
             ITelegramBotClient bot,
-            long chatId)
+            long chatId,
+            NewsRiskService newsService)
         {
             _bot = bot;
             _chatId = chatId;
-
-            _newsService = new NewsRiskService();
+            _newsService = newsService;
         }
 
         public async Task Start()
         {
-            Console.WriteLine(
-                "Мониторинг Израиль–Иран запущен..."
-            );
-
+            Console.WriteLine("Мониторинг Израиль–Иран запущен...");
 
             while (true)
             {
                 try
                 {
-                    RiskResult riskResult =
-                        await _newsService.CalculateRisk();
+                    RiskResult riskResult = await _newsService.CalculateRisk();
+                    int risk = riskResult.Score;
 
-
-                    int risk =
-                        riskResult.Score;
-
-
-
-                    Console.WriteLine(
-                        $"{DateTime.Now:dd.MM.yyyy HH:mm:ss}: Risk = {risk}%"
-                    );
-
+                    Console.WriteLine($"{DateTime.Now:dd.MM.yyyy HH:mm:ss}: Risk = {risk}%");
 
                     foreach (var reason in riskResult.Reasons)
                     {
-                        Console.WriteLine(
-                            "   → " + reason
-                        );
+                        Console.WriteLine("   → " + reason);
                     }
 
-                    // Первый запуск или переход в критическую зону
+                    // do not send full report every check anymore
 
                     if (risk >= 50 && (!_lastRisk.HasValue || _lastRisk.Value < 50))
                     {
                         await SendAlert(riskResult);
                     }
-                    else if (_lastRisk.HasValue &&
-                             risk - _lastRisk.Value >= 20)
+                    else if (_lastRisk.HasValue && risk - _lastRisk.Value >= 20)
                     {
                         await SendAlert(riskResult);
                     }
@@ -70,19 +56,10 @@ namespace TelegramBot.Services
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(
-                        "Ошибка мониторинга: " +
-                        ex.Message
-                    );
+                    Console.WriteLine("Ошибка мониторинга: " + ex.Message);
                 }
 
-
-
-                // Проверка каждые 5 минут
-
-                await Task.Delay(
-                    TimeSpan.FromSeconds(30)
-                );
+                await Task.Delay(TimeSpan.FromSeconds(30));
             }
         }
 
@@ -99,86 +76,78 @@ namespace TelegramBot.Services
 
         private async Task SendAlert(RiskResult result)
         {
-            string reasons;
+            string reasons = result.Reasons.Count > 0
+                ? string.Join("\n", result.Reasons.Select(x => "• " + x))
+                : "• Причины не определены";
 
+            string news = result.NewsTitles.Count > 0
+                ? string.Join("\n", result.NewsTitles.Take(5).Select(x => "📰 " + x))
+                : "Нет важных новостей";
 
-            if (result.Reasons.Count > 0)
-            {
-                reasons = string.Join(
-                    "\n",
-                    result.Reasons.Select(
-                        x => "• " + x
-                    )
-                );
-            }
-            else
-            {
-                reasons = "• Причины не определены";
-            }
-
-            string news;
-
-            if (result.NewsTitles.Count > 0)
-            {
-                news = string.Join(
-                    "\n",
-                    result.NewsTitles
-                        .Take(5)
-                        .Select(
-                            x => "📰 " + x
-                        )
-                );
-            }
-            else
-            {
-                news = "Нет важных новостей";
-            }
-
-            int change = 0;
-
-
-            if (_lastRisk.HasValue)
-            {
-                change =
-                    result.Score -
-                    _lastRisk.Value;
-            }
-
-            string changeText =
-                change > 0
-                ? $"+{change}%"
-                : $"{change}%";
+            int change = _lastRisk.HasValue ? result.Score - _lastRisk.Value : 0;
+            string changeText = change > 0 ? $"+{change}%" : $"{change}%";
 
             string message =
                 $"🚨 ВНИМАНИЕ!\n\n" +
-
                 $"🇮🇱 Израиль – 🇮🇷 Иран\n\n" +
-
                 $"Индекс напряженности: {result.Score}%\n" +
-
                 $"Изменение: {changeText}\n\n" +
-
                 $"Уровень: {GetRiskLevel(result.Score)}\n\n" +
-
                 $"Причины:\n{reasons}\n\n" +
-
                 $"Новости:\n{news}\n\n" +
-
                 $"Время: {DateTime.Now:dd.MM.yyyy HH:mm}\n\n" +
-
                 $"Проверьте последние новости.";
 
+            var subscriberIds = TelegramBot.Services.SubscriberStore.GetSubscriberIds();
 
+            // send to all subscribers
+            foreach (var sid in subscriberIds)
+            {
+                try
+                {
+                    await _bot.SendMessage(chatId: sid, text: message);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Ошибка отправки подписчику {sid}: {ex.Message}");
+                }
+            }
 
-            await _bot.SendMessage(
-                chatId: _chatId,
-                text: message
-            );
+            // always also send to configured admin chat
+            try
+            {
+                if (!subscriberIds.Contains(_chatId))
+                {
+                    await _bot.SendMessage(chatId: _chatId, text: message);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Ошибка отправки в админ-чат: " + ex.Message);
+            }
 
+            Console.WriteLine("⚠ Отправлено предупреждение подписчикам и администратору");
+        }
 
-            Console.WriteLine(
-                "⚠ Отправлено предупреждение"
-            );
+        private async Task SendReport(RiskResult result)
+        {
+            string reasons = result.Reasons.Count > 0
+                ? string.Join("\n", result.Reasons.Select(x => "• " + x))
+                : "• Причины не определены";
+
+            string news = result.NewsTitles.Count > 0
+                ? string.Join("\n", result.NewsTitles.Take(10).Select(x => "📰 " + x))
+                : "Нет важных новостей";
+
+            string message =
+                $"📊 Мониторинг — полный отчёт\n\n" +
+                $"🇮🇱 Израиль – 🇮🇷 Иран\n\n" +
+                $"Риск: {result.Score}%\n\n" +
+                $"Причины:\n{reasons}\n\n" +
+                $"Новости:\n{news}\n\n" +
+                $"Время: {DateTime.Now:dd.MM.yyyy HH:mm}";
+
+            await _bot.SendMessage(chatId: _chatId, text: message);
         }
     }
 }

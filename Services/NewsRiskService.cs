@@ -1,4 +1,5 @@
 ﻿using System.ServiceModel.Syndication;
+using System.Text.RegularExpressions;
 using System.Xml;
 using TelegramBot.Models;
 
@@ -6,238 +7,263 @@ namespace TelegramBot.Services
 {
     public class NewsRiskService
     {
-        private readonly string rssUrl =
-            "https://www.timesofisrael.com/feed/";
+        // kept for compatibility with hot-reload / incremental builds
+        private readonly string rssUrl = "https://www.timesofisrael.com/feed/";
 
+        private readonly List<string> _rssUrls;
+        private readonly OrefAlertService _orefAlertService;
+        private readonly TelegramChannelService _telegramChannelService;
+
+        public NewsRiskService(
+            List<string> rssUrls,
+            OrefAlertService orefAlertService,
+            TelegramChannelService telegramChannelService)
+        {
+            _rssUrls = rssUrls;
+            _orefAlertService = orefAlertService;
+            _telegramChannelService = telegramChannelService;
+        }
+
+        private static readonly XmlReaderSettings SafeXmlSettings = new()
+        {
+            DtdProcessing = DtdProcessing.Parse,
+            XmlResolver = null,
+            MaxCharactersFromEntities = 1024
+        };
+
+        private static readonly Regex RssLinkRegex = new(
+            @"<link[^>]+rel=[""']alternate[""'][^>]+type=[""']application/(rss|atom)\+xml[""'][^>]+href=[""']([^""']+)[""']",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         public async Task<RiskResult> CalculateRisk()
         {
             var result = new RiskResult();
 
+            var activeCities = await _orefAlertService.GetActiveAlertCitiesAsync();
 
-            var keywords =
-                new Dictionary<string, (int Score, string Reason)>
+            if (activeCities.Count > 0)
             {
-                {
-                    "missile launch",
-                    (40, "🚀 Запуск ракет")
-                },
+                result.Score = 100;
+                result.Reasons.Add("🚨 АКТИВНАЯ ТРЕВОГА: " + string.Join(", ", activeCities));
+                result.NewsTitles.Add("Активная тревога Пикуд ха-Ореф: " + string.Join(", ", activeCities));
 
-                {
-                    "missile",
-                    (25, "🚀 Ракетная угроза")
-                },
-
-                {
-                    "rocket",
-                    (25, "🚀 Сообщения о ракетах")
-                },
-
-                {
-                    "airstrike",
-                    (35, "✈️ Авиационный удар")
-                },
-
-                {
-                    "strike",
-                    (20, "💥 Военный удар")
-                },
-
-                {
-                    "attack",
-                    (15, "⚠️ Сообщение об атаке")
-                },
-
-                {
-                    "retaliation",
-                    (20, "⚔️ Угроза ответного удара")
-                },
-
-                {
-                    "nuclear",
-                    (15, "☢️ Ядерная тема")
-                },
-
-                {
-                    "irgc",
-                    (10, "🎖 Активность КСИР")
-                },
-
-                {
-                    "war",
-                    (15, "⚔️ Упоминание войны")
-                }
-            };
-
-
-
-            using var client = new HttpClient();
-
-
-            string xml;
-
-            try
-            {
-                xml =
-                    await client.GetStringAsync(
-                        rssUrl
-                    );
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(
-                    "Ошибка RSS: " + ex.Message
-                );
-
+                Console.WriteLine($"АКТИВНАЯ ТРЕВОГА в городах: {string.Join(", ", activeCities)}");
                 return result;
             }
 
+            var keywords = new Dictionary<string, (int Score, string Reason)>
+            {
+                // English
+                { "missile launch", (40, "🚀 Запуск ракет") },
+                { "missile", (25, "🚀 Ракетная угроза") },
+                { "rocket", (25, "🚀 Сообщения о ракетах") },
+                { "airstrike", (35, "✈️ Авиационный удар") },
+                { "strike", (20, "💥 Военный удар") },
+                { "attack", (15, "⚠️ Сообщение об атаке") },
+                { "retaliation", (20, "⚔️ Угроза ответного удара") },
+                { "nuclear", (15, "☢️ Ядерная тема") },
+                { "irgc", (10, "🎖 Активность КСИР") },
+                { "war", (15, "⚔️ Упоминание войны") },
 
+                // Hebrew
+                { "טיל", (25, "🚀 טיל / ракета (ивר.)") },
+                { "טילים", (25, "🚀 טילים / ракеты (ивר.)") },
+                { "רקטה", (25, "🚀 רקטה / ракета (ивר.)") },
+                { "תקיפה", (30, "✈️ תקיפה / удар (ивר.)") },
+                { "אזעקה", (35, "🚨 אזעקה / сирена (ивר.)") },
+                { "פיצוץ", (25, "💥 פיצוץ / взрыв (ивר.)") },
+                { "מלחמה", (15, "⚔️ מלחמה / война (ивר.)") },
+                { "כטב\"ם", (20, "🛩 כטב\"ם / БПЛА (ивר.)") },
 
-            using var reader =
-                XmlReader.Create(
-                    new StringReader(xml)
-                );
+                // Russian
+                { "ракета", (25, "🚀 Упоминание ракеты") },
+                { "ракеты", (25, "🚀 Упоминание ракет") },
+                { "обстрел", (30, "💥 Сообщение об обстреле") },
+                { "обстрелы", (30, "💥 Сообщение об обстрелах") },
+                { "удар", (25, "💥 Военный удар") },
+                { "атака", (20, "⚠️ Сообщение об атаке") },
+                { "бомба", (25, "💣 Упоминание бомбы") },
+                { "взрыв", (25, "💥 Взрыв") },
+                { "сирена", (35, "🚨 Сирена / тревога") },
+                { "тревога", (30, "🚨 Тревога / сирена") },
+                { "война", (15, "⚔️ Упоминание войны") },
+                { "боевики", (20, "⚔️ Боевики / террористы") },
+                { "террор", (25, "⚠️ Террор / теракт") },
+                { "террорист", (25, "⚠️ Террорист") },
+                { "сбит", (20, "✈️ Сбитый / ПВО") },
+                { "уничтожен", (20, "💥 Уничтожение цели") },
+            };
 
+            using var client = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(5)
+            };
 
-            var feed =
-                SyndicationFeed.Load(reader);
-
-
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(
+                "Mozilla/5.0 (compatible; NewsRiskBot/1.0; +https://example.com/bot)");
 
             int totalScore = 0;
-
             int newsCount = 0;
+            int feedsProcessed = 0;
 
-
-
-            foreach (var item in feed.Items.Take(10))
+            foreach (var rssUrl in _rssUrls)
             {
-                newsCount++;
+                var feed = await LoadFeedAsync(client, rssUrl, allowHtmlFallback: true);
 
-
-                string title =
-                    item.Title?.Text ?? "";
-
-
-                string summary =
-                    item.Summary?.Text ?? "";
-
-
-                string text =
-                    (
-                    title +
-                    " " +
-                    summary
-                    )
-                    .ToLower();
-
-
-
-                int newsScore = 0;
-
-
-
-                foreach (var word in keywords)
+                if (feed == null)
                 {
-                    if (text.Contains(
-                        word.Key.ToLower()))
-                    {
-
-                        newsScore +=
-                            word.Value.Score;
-
-
-                        if (!result.Reasons.Contains(
-                            word.Value.Reason))
-                        {
-                            result.Reasons.Add(
-                                word.Value.Reason
-                            );
-                        }
-                    }
+                    continue;
                 }
 
+                feedsProcessed++;
 
-
-                // сохраняем только важные новости
-
-                if (newsScore >= 20)
+                foreach (var item in feed.Items.Take(10))
                 {
-                    result.NewsTitles.Add(title);
+                    string title = item.Title?.Text ?? "";
+                    string summary = item.Summary?.Text ?? "";
+                    string text = title + " " + summary;
+
+                    ScoreText(text, keywords, result, ref totalScore, ref newsCount, title);
                 }
-
-
-
-                // одна новость максимум 40
-
-                if (newsScore > 40)
-                {
-                    newsScore = 40;
-                }
-
-
-                totalScore += newsScore;
             }
 
+            var telegramPosts = await _telegramChannelService.GetLatestPostsAsync(client);
 
+            if (telegramPosts.Count > 0)
+            {
+                feedsProcessed++;
+
+                foreach (var post in telegramPosts)
+                {
+                    var shortTitle = post.Length > 100 ? post[..100] + "…" : post;
+                    ScoreText(post, keywords, result, ref totalScore, ref newsCount, "[Telegram] " + shortTitle);
+                }
+            }
 
             if (newsCount > 0)
             {
-                double average =
-                    (double)totalScore /
-                    newsCount;
-
-
-                /*
-                   Усилитель риска.
-                   Чтобы важные события
-                   не терялись среди обычных новостей.
-                */
-
-                result.Score =
-                    (int)(average * 1.8);
+                double average = (double)totalScore / newsCount;
+                result.Score = (int)(average * 1.8);
             }
-
-
-
-            // максимум 100
 
             if (result.Score > 100)
             {
                 result.Score = 100;
             }
 
-
-
-            // если есть подозрительные новости,
-            // минимальный риск 5%
-
-            if (result.Score < 5 &&
-               result.Reasons.Count > 0)
+            if (result.Score < 5 && result.Reasons.Count > 0)
             {
                 result.Score = 5;
             }
 
-
-
-            Console.WriteLine(
-                $"Новости: {newsCount}"
-            );
-
-
-            Console.WriteLine(
-                $"Сумма баллов: {totalScore}"
-            );
-
-
-            Console.WriteLine(
-                $"Итоговый риск: {result.Score}%"
-            );
-
-
+            Console.WriteLine($"Источников обработано: {feedsProcessed}");
+            Console.WriteLine($"Новостей/постов: {newsCount}");
+            Console.WriteLine($"Сумма баллов: {totalScore}");
+            Console.WriteLine($"Итоговый риск: {result.Score}%");
 
             return result;
+        }
+
+        private static void ScoreText(
+            string text,
+            Dictionary<string, (int Score, string Reason)> keywords,
+            RiskResult result,
+            ref int totalScore,
+            ref int newsCount,
+            string titleForLog)
+        {
+            newsCount++;
+
+            var lowerText = text.ToLowerInvariant();
+            int newsScore = 0;
+
+            foreach (var word in keywords)
+            {
+                if (lowerText.Contains(word.Key.ToLowerInvariant()))
+                {
+                    newsScore += word.Value.Score;
+
+                    if (!result.Reasons.Contains(word.Value.Reason))
+                    {
+                        result.Reasons.Add(word.Value.Reason);
+                    }
+                }
+            }
+
+            if (newsScore >= 20)
+            {
+                result.NewsTitles.Add(titleForLog);
+            }
+
+            if (newsScore > 40)
+            {
+                newsScore = 40;
+            }
+
+            totalScore += newsScore;
+        }
+
+        private async Task<SyndicationFeed?> LoadFeedAsync(HttpClient client, string url, bool allowHtmlFallback)
+        {
+            try
+            {
+                using var response = await client.GetAsync(url);
+                response.EnsureSuccessStatusCode();
+
+                var contentType = response.Content.Headers.ContentType?.MediaType ?? "";
+                var body = await response.Content.ReadAsStringAsync();
+
+                if (contentType.Contains("html") || body.TrimStart().StartsWith("<!DOCTYPE html", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!allowHtmlFallback)
+                    {
+                        Console.WriteLine($"Пропуск ({url}): вернулся HTML, автопоиск фида уже был выполнен ранее");
+                        return null;
+                    }
+
+                    var discoveredUrl = TryExtractRssLinkFromHtml(body, url);
+
+                    if (discoveredUrl == null)
+                    {
+                        Console.WriteLine($"Пропуск ({url}): вернулся HTML, RSS-ссылка внутри не найдена");
+                        return null;
+                    }
+
+                    return await LoadFeedAsync(client, discoveredUrl, allowHtmlFallback: false);
+                }
+
+                using var reader = XmlReader.Create(new StringReader(body), SafeXmlSettings);
+                return SyndicationFeed.Load(reader);
+            }
+            catch (XmlException ex)
+            {
+                Console.WriteLine($"Ошибка парсинга XML ({url}): {ex.Message}");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка RSS ({url}): {ex.Message}");
+                return null;
+            }
+        }
+
+        private static string? TryExtractRssLinkFromHtml(string html, string pageUrl)
+        {
+            var match = RssLinkRegex.Match(html);
+
+            if (!match.Success)
+            {
+                return null;
+            }
+
+            var href = match.Groups[2].Value;
+
+            if (Uri.TryCreate(new Uri(pageUrl), href, out var absoluteUri))
+            {
+                return absoluteUri.ToString();
+            }
+
+            return null;
         }
     }
 }
