@@ -56,7 +56,15 @@ namespace TelegramBot.Services
                     displayName = chatId.ToString();
                 }
 
-                SubscriberStore.Add(chatId, displayName);
+                SubscriberStore.Add(
+                    chatId,
+                    displayName,
+                    phone: null,
+                    username: update.Message.From?.Username,
+                    firstName: update.Message.From?.FirstName,
+                    lastName: update.Message.From?.LastName,
+                    language: update.Message.From?.LanguageCode,
+                    chatType: update.Message.Chat?.Type.ToString());
 
                 var result = await _riskService.CalculateRisk();
 
@@ -91,6 +99,23 @@ namespace TelegramBot.Services
                             Console.WriteLine($"Ошибка отправки подписчику {sid}: {ex.Message}");
                         }
                     }
+                }
+            }
+
+            // set phone: /setphone +7926xxxxxxx
+            if (text.StartsWith("/setphone"))
+            {
+                var cid = update.Message.Chat.Id;
+                var parts = text.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length < 2)
+                {
+                    await _bot.SendMessage(chatId: cid, text: "Использование: /setphone <номер>", cancellationToken: cancellationToken);
+                }
+                else
+                {
+                    var phone = parts[1].Trim();
+                    SubscriberStore.SetPhone(cid, phone);
+                    await _bot.SendMessage(chatId: cid, text: $"Сохранён номер: {phone}", cancellationToken: cancellationToken);
                 }
             }
 

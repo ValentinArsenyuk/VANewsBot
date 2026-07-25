@@ -10,3 +10,6 @@ obj/
 # Secrets
 appsettings.json
 appsettings.Development.json
+
+# Subscriber data
+Data/
