@@ -112,6 +112,39 @@ namespace TelegramBot.Services
                 { "иранская поддержка террористов", (25, "⚠️ Упоминание иранской поддержки террористов") },
                 { "иранская агрессия", (30, "⚔️ Упоминание иранской агрессии") },
                 { "иранская угроза безопасности Израиля", (35, "⚠️ Угроза безопасности Израиля") },
+                // Additional Russian keywords
+                { "залп", (35, "💥 Залп / массированный обстрел") },
+                { "пуск", (35, "🚀 Пуск ракет") },
+                { "баллистическая", (35, "☢️ Баллистическая ракета") },
+                { "крылатая", (30, "🚀 Крылатая ракета") },
+                { "обстрелян", (30, "💥 Под обстрелом / обстрелян") },
+                { "обстреляли", (30, "💥 Обстрелян / атакован") },
+                { "разрушен", (25, "🏚️ Разрушения / разрушен") },
+                { "разрушения", (25, "🏚️ Разрушения") },
+                { "потери", (20, "⚠️ Потери / жертвы") },
+                { "уничтожили", (25, "💥 Уничтожение / нейтрализация") },
+
+                // Additional English keywords
+                { "launch", (35, "🚀 Launch / пуск ракеты") },
+                { "rocket attack", (40, "🚀 Rocket attack / ракетная атака") },
+                { "missile attack", (40, "🚀 Missile attack / ракетная атака") },
+                { "drone", (25, "🛩 Drone / упоминание БПЛА") },
+                { "uav", (25, "🛩 UAV / упоминание БПЛА") },
+                { "shelling", (30, "💥 Shelling / обстрел") },
+                { "bombing", (30, "💣 Bombing / бомбардировка") },
+                { "casualties", (25, "⚰️ Casualties / жертвы") },
+                { "killed", (25, "⚰️ Killed / погибшие") },
+                { "injured", (20, "🚑 Injured / раненые") },
+
+                // Additional Hebrew keywords
+                { "שיגור", (35, "🚀 שיגור / запуск") },
+                { "ירי", (30, "💥 ירי / огонь") },
+                { "פיגוע", (30, "⚠️ פיגוע / теракт") },
+                { "הרג", (25, "⚰️ הרג / погибшие") },
+                { "נפגע", (20, "🚑 נפגע / ранены") },
+                { "פינוי", (20, "🚨 פינוי / эвакуация") },
+                { "מל\"ט", (25, "🛩 מל\"ט / БПЛА") },
+                { "צבא", (15, "🎖 צבא / войска") },
             };
 
             using var client = new HttpClient
@@ -119,8 +152,7 @@ namespace TelegramBot.Services
                 Timeout = TimeSpan.FromSeconds(5)
             };
 
-            client.DefaultRequestHeaders.UserAgent.ParseAdd(
-                "Mozilla/5.0 (compatible; NewsRiskBot/1.0; +https://example.com/bot)");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; NewsRiskBot/1.0; +https://example.com/bot)");
 
             int totalScore = 0;
             int newsCount = 0;
@@ -162,6 +194,7 @@ namespace TelegramBot.Services
 
             if (newsCount > 0)
             {
+                //Расчет риска
                 double average = (double)totalScore / newsCount;
                 result.Score = (int)(average * 1.8);
             }
