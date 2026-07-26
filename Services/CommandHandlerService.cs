@@ -80,26 +80,8 @@ namespace TelegramBot.Services
                     //$"Подписались: {subscribers}\n\n" +
                     $"Время: {DateTime.Now:dd.MM.yyyy HH:mm}";
 
-                var subscriberIds = SubscriberStore.GetSubscriberIds();
-
-                if (subscriberIds.Count == 0)
-                {
-                    await _bot.SendMessage(chatId: chatId, text: message, cancellationToken: cancellationToken);
-                }
-                else
-                {
-                    foreach (var sid in subscriberIds)
-                    {
-                        try
-                        {
-                            await _bot.SendMessage(chatId: sid, text: message, cancellationToken: cancellationToken);
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Ошибка отправки подписчику {sid}: {ex.Message}");
-                        }
-                    }
-                }
+                // reply only to the requester (do not broadcast to all subscribers)
+                await _bot.SendMessage(chatId: chatId, text: message, cancellationToken: cancellationToken);
             }
 
             // set phone: /setphone +7926xxxxxxx
