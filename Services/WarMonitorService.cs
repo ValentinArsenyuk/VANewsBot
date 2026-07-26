@@ -9,6 +9,7 @@ namespace TelegramBot.Services
         private readonly ITelegramBotClient _bot;
         private readonly long _chatId;
         private readonly NewsRiskService _newsService;
+        private readonly int _pollIntervalSeconds;
 
         private int? _lastRisk = null;
 
@@ -16,11 +17,14 @@ namespace TelegramBot.Services
         public WarMonitorService(
             ITelegramBotClient bot,
             long chatId,
-            NewsRiskService newsService)
+            NewsRiskService newsService,
+            int pollIntervalSeconds = 5)
         {
             _bot = bot;
             _chatId = chatId;
             _newsService = newsService;
+            // enforce minimum poll interval of 5 seconds
+            _pollIntervalSeconds = pollIntervalSeconds >= 5 ? pollIntervalSeconds : 5;
         }
 
         public async Task Start()
@@ -59,7 +63,7 @@ namespace TelegramBot.Services
                     Console.WriteLine("Ошибка мониторинга: " + ex.Message);
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(30));
+                await Task.Delay(TimeSpan.FromSeconds(_pollIntervalSeconds));
             }
         }
 

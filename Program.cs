@@ -62,6 +62,12 @@ if (riskSection.Exists())
     }
 
     riskSettings.IsraeliProxyUrl = riskSection["IsraeliProxyUrl"];
+    // optional poll interval
+    if (int.TryParse(riskSection["PollIntervalSeconds"], out var iv))
+    {
+        // validate and enforce minimum of 5 seconds
+        riskSettings.PollIntervalSeconds = iv >= 5 ? iv : 5;
+    }
 }
 
 var orefAlertService = new OrefAlertService(riskSettings.IsraeliProxyUrl);
@@ -98,7 +104,7 @@ if (riskSettings.RssUrls.Count == 0 && riskSettings.TelegramChannels.Count == 0)
 
 if (chatId != 0)
 {
-    var warMonitor = new WarMonitorService(botClient, chatId, newsRiskService);
+    var warMonitor = new WarMonitorService(botClient, chatId, newsRiskService, riskSettings.PollIntervalSeconds);
 
     _ = Task.Run(() => warMonitor.Start());
 }
