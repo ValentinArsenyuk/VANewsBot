@@ -110,7 +110,8 @@ namespace TelegramBot.Services
 
                 await _bot.SendMessage(
                     chatId: chatId,
-                    text: $"Ваш ChatId: {chatId}",
+                    //text: $"Ваш ChatId: {chatId}",
+                    text: $"Бот запущен, когда угроза будет больше 50% или резко увеличиться вы получите сообщение. В любой момент можно проверить текущий шанс войны с Ираном командой /risk",
                     cancellationToken: cancellationToken
                 );
             }

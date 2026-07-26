@@ -12,7 +12,7 @@ namespace VANewsBot.Models
             public List<string> TelegramChannels { get; set; } = new();
             public string? IsraeliProxyUrl { get; set; }
             // Poll interval in seconds for the background monitor. Default 5 seconds.
-            public int PollIntervalSeconds { get; set; } = 5;
+            public int PollIntervalSeconds { get; set; } = 15;
         }
     }
 }

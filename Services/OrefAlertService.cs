@@ -25,16 +25,14 @@ namespace TelegramBot.Services
 
             _client.DefaultRequestHeaders.Add("Referer", "https://www.oref.org.il/");
             _client.DefaultRequestHeaders.Add("X-Requested-With", "XMLHttpRequest");
-            _client.DefaultRequestHeaders.UserAgent.ParseAdd(
-                "Mozilla/5.0 (compatible; NewsRiskBot/1.0)");
+            _client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; NewsRiskBot/1.0)");
         }
 
         public async Task<List<string>> GetActiveAlertCitiesAsync()
         {
             try
             {
-                var json = await _client.GetStringAsync(
-                    "https://www.oref.org.il/WarningMessages/alert/alerts.json");
+                var json = await _client.GetStringAsync("https://www.oref.org.il/WarningMessages/alert/alerts.json");
 
                 if (string.IsNullOrWhiteSpace(json))
                 {
