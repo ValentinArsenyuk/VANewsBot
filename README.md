@@ -50,3 +50,32 @@ PRs welcome. Run tests (if any) and follow existing code style.
 License
 -------
 See repository license (if any).
+
+Deployment / Run as background service
+------------------------------------
+Two recommended options to run VANewsBot on Windows so it starts automatically after reboot:
+
+1) Task Scheduler (simple)
+ - Publish the app: dotnet publish -c Release -o C:\VANewsBot\publish
+ - Create run_bot.bat that starts the app (included in this repo)
+ - Open Task Scheduler -> Create Task
+   * General: Name = VANewsBot, Run whether user is logged on or not
+   * Triggers: At startup, Delay task for 30 seconds
+   * Actions: Start a program -> Program/script: cmd.exe
+     Arguments: /c "C:\VANewsBot\run_bot.bat"
+   * Settings: Allow task to be run on demand; restart on failure
+
+2) Install as Windows service (recommended for production) using nssm
+ - Download nssm (https://nssm.cc) and extract
+ - Run: nssm install VANewsBot
+   * Path: C:\Program Files\dotnet\dotnet.exe
+   * Arguments: C:\VANewsBot\publish\VANewsBot.dll
+   * Startup type: Automatic
+ - Start service: nssm start VANewsBot (or use Services.msc)
+ - nssm provides options to capture stdout/stderr into files and automatic restarts.
+
+Notes
+-----
+- Do not commit publish/ folder into source control; it is ignored by .gitignore.
+- For Task Scheduler running 'whether user is logged on or not' you will need to provide the account password.
+- Keep PollIntervalSeconds in appsettings.json to configure how often the monitor runs (minimum 5 seconds).

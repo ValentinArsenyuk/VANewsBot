@@ -13,3 +13,6 @@ appsettings.Development.json
 
 # Subscriber data
 Data/
+
+# Published binaries
+publish/
