@@ -81,8 +81,8 @@ namespace TelegramBot.Services
         private async Task SendAlert(RiskResult result)
         {
             string reasons = result.Reasons.Count > 0
-                ? string.Join("\n", result.Reasons.Select(x => "• " + x))
-                : "• Причины не определены";
+                ? string.Join(" / ", result.Reasons)
+                : "Причины не определены";
 
             string news = result.NewsTitles.Count > 0
                 ? string.Join("\n", result.NewsTitles.Take(5).Select(x => "📰 " + x))
@@ -136,8 +136,8 @@ namespace TelegramBot.Services
         private async Task SendReport(RiskResult result)
         {
             string reasons = result.Reasons.Count > 0
-                ? string.Join("\n", result.Reasons.Select(x => "• " + x))
-                : "• Причины не определены";
+                ? string.Join(" / ", result.Reasons)
+                : "Причины не определены";
 
             string news = result.NewsTitles.Count > 0
                 ? string.Join("\n", result.NewsTitles.Take(10).Select(x => "📰 " + x))
