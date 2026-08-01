@@ -92,12 +92,12 @@ namespace TelegramBot.Services
             string changeText = change > 0 ? $"+{change}%" : $"{change}%";
 
             string message =
-                $"🚨 ВНИМАНИЕ!\n\n" +
                 $"🇮🇱 Израиль – 🇮🇷 Иран\n\n" +
+                $"🚨 ВНИМАНИЕ!\n\n" +
                 $"Индекс напряженности: {result.Score}%\n" +
                 $"Изменение: {changeText}\n\n" +
                 $"Уровень: {GetRiskLevel(result.Score)}\n\n" +
-                $"Причины:\n{reasons}\n\n" +
+                $"Причины: {reasons} / " +
                 $"Новости:\n{news}\n\n" +
                 $"Время: {DateTime.Now:dd.MM.yyyy HH:mm}\n\n" +
                 $"Проверьте последние новости.";
@@ -109,7 +109,7 @@ namespace TelegramBot.Services
             {
                 try
                 {
-                    await _bot.SendMessage(chatId: sid, text: message);
+                    await _bot.SendMessage(chatId: sid, text: message, parseMode: Telegram.Bot.Types.Enums.ParseMode.Html);
                 }
                 catch (Exception ex)
                 {
@@ -122,7 +122,7 @@ namespace TelegramBot.Services
             {
                 if (!subscriberIds.Contains(_chatId))
                 {
-                    await _bot.SendMessage(chatId: _chatId, text: message);
+                    await _bot.SendMessage(chatId: _chatId, text: message, parseMode: Telegram.Bot.Types.Enums.ParseMode.Html);
                 }
             }
             catch (Exception ex)
@@ -147,11 +147,11 @@ namespace TelegramBot.Services
                 $"📊 Мониторинг — полный отчёт\n\n" +
                 $"🇮🇱 Израиль – 🇮🇷 Иран\n\n" +
                 $"Риск: {result.Score}%\n\n" +
-                $"Причины:\n{reasons}\n\n" +
+                $"Причины: {reasons} / " +
                 $"Новости:\n{news}\n\n" +
                 $"Время: {DateTime.Now:dd.MM.yyyy HH:mm}";
 
-            await _bot.SendMessage(chatId: _chatId, text: message);
+            await _bot.SendMessage(chatId: _chatId, text: message, parseMode: Telegram.Bot.Types.Enums.ParseMode.Html);
         }
     }
 }
